@@ -1,0 +1,19 @@
+# Sanal ortam
+.venv/
+
+# İndirilen/dönüştürülen modeller (NLLB CTranslate2, Whisper cache) — büyük dosyalar,
+# GitHub'ın boyut limitini aşıyor. README'deki adımlarla yeniden oluşturulabilir.
+models/
+
+# Python bytecode önbelleği
+__pycache__/
+*.pyc
+
+# Kullanıcıya özel ayarlar (ilk çalıştırmada otomatik oluşur)
+config.yaml
+
+# Test/PoC çıktıları (stage scriptleri çalıştırıldığında oluşur)
+stage1_test.wav
+
+# Mimari dokümanı (repo dışında tutulan teknik doküman)
+Offline_Altyazi_Sistemi_Mimarisi.pdf
