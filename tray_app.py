@@ -58,6 +58,10 @@ class TrayApp:
         self.tray.setContextMenu(self.menu)
         self.tray.show()
 
+    def start(self) -> None:
+        if not self._running:
+            self._toggle_start_stop()
+
     def _toggle_start_stop(self) -> None:
         if self._running:
             self.on_stop()

@@ -53,6 +53,7 @@ def main() -> None:
         on_toggle_lock=toggle_lock,
         on_settings_changed=on_settings_changed,
     )
+    tray.start()
 
     sys.exit(app.exec())
 

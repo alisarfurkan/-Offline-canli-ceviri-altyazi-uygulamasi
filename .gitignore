@@ -12,8 +12,11 @@ __pycache__/
 # Kullanıcıya özel ayarlar (ilk çalıştırmada otomatik oluşur)
 config.yaml
 
-# Test/PoC çıktıları (stage scriptleri çalıştırıldığında oluşur)
-stage1_test.wav
+# Başlatıcının (altyazi.pyw) yazdığı çalışma logu
+altyazi.log
+
+# IDE ayarları (PyCharm)
+.idea/
 
 # Mimari dokümanı (repo dışında tutulan teknik doküman)
 Offline_Altyazi_Sistemi_Mimarisi.pdf
