@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 os.environ.setdefault("ARGOS_STANZA_AVAILABLE", "0")
 
@@ -10,7 +11,9 @@ from pathlib import Path
 import argostranslate.package
 import argostranslate.translate
 
-NLLB_MODEL_DIR = Path(__file__).parent / "models" / "nllb-ct2"
+ARGOS_RETRY_SECONDS = 300.0
+
+NLLB_MODEL_DIR =Path(__file__).parent / "models" / "nllb-ct2"
 
 ISO_TO_FLORES = {
     "en": "eng_Latn",
@@ -37,8 +40,10 @@ class Translator(ABC):
 
 
 class ArgosTranslator(Translator):
+
     def __init__(self) -> None:
         self._ensured_pairs: set[tuple[str, str]] = set()
+        self._failed_pairs: dict[tuple[str, str], tuple[float, str]] = {}
 
     def _has_path(self, source_lang: str, target_lang: str) -> bool:
         installed = argostranslate.translate.get_installed_languages()
@@ -52,10 +57,27 @@ class ArgosTranslator(Translator):
         pair = (source_lang, target_lang)
         if pair in self._ensured_pairs:
             return
+        failed = self._failed_pairs.get(pair)
+        if failed is not None:
+            failed_at, message = failed
+            if time.monotonic() - failed_at < ARGOS_RETRY_SECONDS:
+                raise RuntimeError(message)
+            del self._failed_pairs[pair]
         if self._has_path(source_lang, target_lang):
             self._ensured_pairs.add(pair)
             return
 
+        try:
+            self._download_packages(source_lang, target_lang)
+        except Exception as exc:
+            self._failed_pairs[pair] = (
+                time.monotonic(),
+                f"Argos Translate: {source_lang} -> {target_lang} paketi kurulamadı: {exc}",
+            )
+            raise
+        self._ensured_pairs.add(pair)
+
+    def _download_packages(self, source_lang: str, target_lang: str) -> None:
         argostranslate.package.update_package_index()
         available = argostranslate.package.get_available_packages()
         installed_pairs = {(p.from_code, p.to_code) for p in argostranslate.package.get_installed_packages()}
@@ -72,7 +94,6 @@ class ArgosTranslator(Translator):
                 f"Argos Translate: {source_lang} -> {target_lang} için (doğrudan veya İngilizce "
                 "üzerinden) bir çeviri yolu bulunamadı."
             )
-        self._ensured_pairs.add(pair)
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         text = text.strip()
@@ -83,6 +104,7 @@ class ArgosTranslator(Translator):
 
 
 class NllbCt2Translator(Translator):
+
     def __init__(self, model_dir: Path = NLLB_MODEL_DIR, device: str = "cuda", compute_type: str = "float16") -> None:
         if not model_dir.is_dir():
             raise FileNotFoundError(

@@ -27,12 +27,11 @@ def _make_icon() -> QIcon:
 
 
 class TrayApp:
-    def __init__(self, settings: Settings, on_start, on_stop, on_toggle_lock, on_settings_changed):
+    def __init__(self, settings: Settings, on_start, on_stop, on_toggle_lock):
         self.settings = settings
         self.on_start = on_start
         self.on_stop = on_stop
         self.on_toggle_lock = on_toggle_lock
-        self.on_settings_changed = on_settings_changed
         self._running = False
 
         self.tray = QSystemTrayIcon(_make_icon())
@@ -77,16 +76,19 @@ class TrayApp:
         self.settings.save()
         self.on_toggle_lock(checked)
 
-    def _open_settings(self) -> None:
-        was_running = self._running
-        if was_running:
-            self.on_stop()
-            self.start_stop_action.setText("Başlat")
-            self._running = False
+    def mark_stopped(self) -> None:
+        self.start_stop_action.setText("Başlat")
+        self._running = False
 
+    def _open_settings(self) -> None:
         dialog = SettingsDialog(self.settings)
-        if dialog.exec():
-            dialog.apply_to(self.settings)
-            self.settings.save()
-            self.on_settings_changed()
+        if not dialog.exec():
+            return
+
+        dialog.apply_to(self.settings)
+        self.settings.save()
+        if self._running:
+            self.on_stop()
+            self.on_start()
+        else:
             QMessageBox.information(None, "Ayarlar", "Ayarlar kaydedildi. Başlat'a basarak yeni ayarlarla dinlemeye başlayabilirsiniz.")

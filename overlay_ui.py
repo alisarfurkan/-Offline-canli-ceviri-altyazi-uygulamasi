@@ -85,13 +85,22 @@ class SubtitleOverlay(QWidget):
         new_height = max(MIN_HEIGHT, min(MAX_HEIGHT, needed_height))
 
         if new_height != self.height():
+            bottom = self.y() + self.height()
             self.resize(WIDTH, new_height)
-        self._reposition_bottom_anchored()
+            screen = (self.screen() or QApplication.primaryScreen()).availableGeometry()
+            y = max(screen.top(), min(bottom - new_height, screen.y() + screen.height() - new_height))
+            x = max(screen.left(), min(self.x(), screen.x() + screen.width() - WIDTH))
+            self.move(x, y)
 
     def set_text(self, text: str) -> None:
         self.text_changed.emit(html.escape(text))
 
     def set_subtitle(self, original: str, translated: str) -> None:
+        if not translated:
+            self.text_changed.emit(
+                f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(original)}</div>"
+            )
+            return
         rich = (
             f"<div style='font-size:13px;color:#bbbbbb;'>{html.escape(original)}</div>"
             f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(translated)}</div>"
@@ -101,6 +110,10 @@ class SubtitleOverlay(QWidget):
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, locked)
+        was_visible = self.isVisible()
+        self.setWindowFlag(Qt.WindowType.WindowTransparentForInput, locked)
+        if was_visible:
+            self.show()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
