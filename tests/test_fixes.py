@@ -357,5 +357,52 @@ class TraySettingsTests(unittest.TestCase):
         tray.tray.hide()
 
 
+def _load_launcher():
+    import importlib.machinery
+    import importlib.util
+
+    path = Path(__file__).resolve().parent.parent / "altyazi.pyw"
+    loader = importlib.machinery.SourceFileLoader("altyazi_launcher", str(path))
+    spec = importlib.util.spec_from_loader("altyazi_launcher", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+class LauncherLogTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+
+        self.launcher = _load_launcher()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log_path = Path(self.tmp.name) / "altyazi.log"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_previous_session_is_kept(self):
+        self.log_path.write_text("önceki oturumun çökme kaydı\n", encoding="utf-8")
+        log = self.launcher.open_log(self.log_path)
+        log.write("yeni kayıt\n")
+        log.close()
+        text = self.log_path.read_text(encoding="utf-8")
+        self.assertIn("önceki oturumun çökme kaydı", text)
+        self.assertIn("oturum başladı", text)
+        self.assertIn("yeni kayıt", text)
+
+    def test_large_log_is_rotated(self):
+        self.log_path.write_text("eski\n" * 10, encoding="utf-8")
+        with mock.patch.object(self.launcher, "LOG_MAX_BYTES", 10):
+            self.launcher.open_log(self.log_path).close()
+        old = self.log_path.with_name("altyazi.eski.log")
+        self.assertIn("eski", old.read_text(encoding="utf-8"))
+        self.assertNotIn("eski", self.log_path.read_text(encoding="utf-8"))
+
+    def test_small_log_is_not_rotated(self):
+        self.log_path.write_text("küçük\n", encoding="utf-8")
+        self.launcher.open_log(self.log_path).close()
+        self.assertFalse(self.log_path.with_name("altyazi.eski.log").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
