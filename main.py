@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from config import Settings
 from overlay_ui import SubtitleOverlay
@@ -11,6 +11,31 @@ from pipeline import Pipeline
 from tray_app import TrayApp
 
 QUIT_JOIN_SECONDS = 2.0
+INSTANCE_MUTEX_NAME = "Local\\OfflineCanliAltyazi"
+
+
+def acquire_single_instance(name: str = INSTANCE_MUTEX_NAME):
+    if sys.platform != "win32":
+        return object()
+    import win32api
+    import win32event
+    import winerror
+
+    try:
+        handle = win32event.CreateMutex(None, False, name)
+    except Exception as exc:
+        print(f"Tek örnek kontrolü yapılamadı: {exc}", file=sys.stderr)
+        return object()
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        handle.Close()
+        return None
+    return handle
+
+
+def release_single_instance(handle) -> None:
+    close = getattr(handle, "Close", None)
+    if close is not None:
+        close()
 
 
 class _PipelineBridge(QObject):
@@ -45,6 +70,11 @@ class _PipelineBridge(QObject):
 def main() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    instance_lock = acquire_single_instance()
+    if instance_lock is None:
+        QMessageBox.information(None, "Offline Canlı Altyazı", "Program zaten çalışıyor (sistem tepsisine bakın).")
+        sys.exit(0)
 
     settings = Settings.load()
 

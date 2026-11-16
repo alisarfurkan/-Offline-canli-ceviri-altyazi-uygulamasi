@@ -52,8 +52,9 @@ class SettingsDialog(QDialog):
 
         self.model_combo = QComboBox()
         self.model_combo.addItems(MODEL_CHOICES)
-        if settings.model_size in MODEL_CHOICES:
-            self.model_combo.setCurrentText(settings.model_size)
+        if settings.model_size not in MODEL_CHOICES:
+            self.model_combo.addItem(settings.model_size)
+        self.model_combo.setCurrentText(settings.model_size)
 
         self.backend_combo = QComboBox()
         self.backend_combo.addItem("NLLB-200 (GPU, daha kaliteli)", "nllb")

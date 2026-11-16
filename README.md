@@ -26,8 +26,12 @@ git clone https://github.com/alisarfurkan/-Offline-canli-ceviri-altyazi-uygulama
 cd -Offline-canli-ceviri-altyazi-uygulamasi
 py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements.lock
 ```
+
+`requirements.lock`, programın test edildiği sürümleri birebir sabitler (dolaylı
+bağımlılıklar olan torch, stanza vb. dahil). En yeni sürümleri denemek isterseniz
+`pip install -r requirements.txt` kullanabilirsiniz, ancak yeni sürümler uyumsuz olabilir.
 
 **2. NLLB-200 çeviri modelini hazırla (tek seferlik, ~2.4 GB indirme)**
 

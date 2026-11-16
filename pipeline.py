@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import faulthandler
 import queue
+import sys
 import threading
 import time
 import traceback
@@ -18,6 +20,16 @@ OnFatal = Callable[["Pipeline"], None]
 
 CAPTURE_RETRY_SECONDS = 2.0
 WORKER_JOIN_SECONDS = 5.0
+MAX_UTTERANCE_SECONDS = 10.0
+SLOW_ASR_SECONDS = 30.0
+
+
+def _arm_slow_asr_dump() -> bool:
+    try:
+        faulthandler.dump_traceback_later(SLOW_ASR_SECONDS, file=sys.stderr)
+        return True
+    except (AttributeError, ValueError, RuntimeError, OSError):
+        return False
 
 
 class Pipeline:
@@ -140,7 +152,7 @@ class Pipeline:
 
     def _run_vad(self) -> None:
         try:
-            segmenter = VadSegmenter(min_silence_duration_ms=600, max_utterance_seconds=10.0)
+            segmenter = VadSegmenter(min_silence_duration_ms=600, max_utterance_seconds=MAX_UTTERANCE_SECONDS)
         except Exception as exc:
             self._fail(f"VAD yükleme hatası: {exc}")
             return
@@ -178,12 +190,16 @@ class Pipeline:
             except queue.Empty:
                 continue
             language = None if self.settings.source_lang == "auto" else self.settings.source_lang
+            armed = _arm_slow_asr_dump()
             try:
                 result = self._transcriber.transcribe(utterance, language=language)
             except Exception as exc:
                 traceback.print_exc()
                 self._status(f"Tanıma hatası: {exc}")
                 continue
+            finally:
+                if armed:
+                    faulthandler.cancel_dump_traceback_later()
             if result.text:
                 try:
                     self._mt_q.put_nowait((result.text, result.language))

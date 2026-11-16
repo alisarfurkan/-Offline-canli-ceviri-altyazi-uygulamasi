@@ -8,10 +8,12 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QTextDocument
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 WIDTH = 1000
+SCREEN_SIDE_MARGIN = 20
 MIN_HEIGHT = 120
 MAX_HEIGHT = 320
 MARGIN_H, MARGIN_V = 24, 16
 BOTTOM_MARGIN = 60
+SUBTITLE_TIMEOUT_MS = 13000
 
 if sys.platform == "win32":
     import ctypes
@@ -52,7 +54,11 @@ class SubtitleOverlay(QWidget):
 
         self.text_changed.connect(self._apply_text)
 
-        self.resize(WIDTH, MIN_HEIGHT)
+        self._clear_timer = QTimer(self)
+        self._clear_timer.setSingleShot(True)
+        self._clear_timer.timeout.connect(lambda: self.text_changed.emit(""))
+
+        self.resize(self._bar_width(), MIN_HEIGHT)
         self._reposition_bottom_anchored()
 
         self._topmost_timer = QTimer(self)
@@ -67,6 +73,12 @@ class SubtitleOverlay(QWidget):
             hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE
         )
 
+    def _available_geometry(self):
+        return (self.screen() or QApplication.primaryScreen()).availableGeometry()
+
+    def _bar_width(self) -> int:
+        return max(200, min(WIDTH, self._available_geometry().width() - 2 * SCREEN_SIDE_MARGIN))
+
     def _reposition_bottom_anchored(self) -> None:
         screen = QApplication.primaryScreen().availableGeometry()
         bottom_y = screen.y() + screen.height() - BOTTOM_MARGIN
@@ -80,32 +92,34 @@ class SubtitleOverlay(QWidget):
         doc = QTextDocument()
         doc.setDefaultFont(self.label.font())
         doc.setHtml(rich_text)
-        doc.setTextWidth(WIDTH - 2 * MARGIN_H)
+        width = self._bar_width()
+        doc.setTextWidth(width - 2 * MARGIN_H)
         needed_height = int(doc.size().height()) + 2 * MARGIN_V
         new_height = max(MIN_HEIGHT, min(MAX_HEIGHT, needed_height))
 
-        if new_height != self.height():
+        if new_height != self.height() or width != self.width():
             bottom = self.y() + self.height()
-            self.resize(WIDTH, new_height)
-            screen = (self.screen() or QApplication.primaryScreen()).availableGeometry()
+            self.resize(width, new_height)
+            screen = self._available_geometry()
             y = max(screen.top(), min(bottom - new_height, screen.y() + screen.height() - new_height))
-            x = max(screen.left(), min(self.x(), screen.x() + screen.width() - WIDTH))
+            x = max(screen.left(), min(self.x(), screen.x() + screen.width() - width))
             self.move(x, y)
+        self.update()
 
     def set_text(self, text: str) -> None:
+        self._clear_timer.stop()
         self.text_changed.emit(html.escape(text))
 
     def set_subtitle(self, original: str, translated: str) -> None:
         if not translated:
-            self.text_changed.emit(
-                f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(original)}</div>"
+            rich = f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(original)}</div>"
+        else:
+            rich = (
+                f"<div style='font-size:13px;color:#bbbbbb;'>{html.escape(original)}</div>"
+                f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(translated)}</div>"
             )
-            return
-        rich = (
-            f"<div style='font-size:13px;color:#bbbbbb;'>{html.escape(original)}</div>"
-            f"<div style='font-size:22px;font-weight:600;color:white;'>{html.escape(translated)}</div>"
-        )
         self.text_changed.emit(rich)
+        self._clear_timer.start(SUBTITLE_TIMEOUT_MS)
 
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
@@ -116,11 +130,14 @@ class SubtitleOverlay(QWidget):
             self.show()
 
     def paintEvent(self, event) -> None:
+        empty = not self.label.text()
+        if empty and self._locked:
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(self.rect(), 16, 16)
-        painter.fillPath(path, QColor(0, 0, 0, 160))
+        painter.fillPath(path, QColor(0, 0, 0, 40 if empty else 160))
 
     def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
